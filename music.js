@@ -29,7 +29,7 @@ const client = new Client({
 // Initialize DisTube with plugins
 const distube = new DisTube(client, {
   emitNewSongOnly: true,
-  plugins: [new SpotifyPlugin(), new SoundCloudPlugin(), new YtDlpPlugin()],
+  plugins: [new SpotifyPlugin(), new SoundCloudPlugin(), new YtDlpPlugin({ update: true })],
 });
 
 // Ready Event
@@ -46,16 +46,12 @@ client.on("interactionCreate", async (interaction) => {
 
     // Validate URL or search term
     if (!url) {
-      return interaction.reply(
-        "Please provide a valid YouTube URL or search term."
-      );
+      return interaction.reply("Please provide a valid YouTube URL or search term.");
     }
 
     // Ensure the user is in a voice channel
     if (!interaction.member.voice.channel) {
-      return interaction.reply(
-        "You need to be in a Voice Channel to play music."
-      );
+      return interaction.reply("You need to be in a Voice Channel to play music.");
     }
 
     await interaction.deferReply();
@@ -87,6 +83,36 @@ client.on("interactionCreate", async (interaction) => {
 
     interaction.reply(`**Current Queue**\n${queueList}`);
   }
+
+  if (interaction.commandName === "skip") {
+    const queue = distube.getQueue(interaction.guild.id);
+    if (!queue) {
+      return interaction.reply("There is no song to skip.");
+    }
+
+    try {
+      distube.skip(interaction.guild.id);
+      interaction.reply("⏩ Skipped the current song.");
+    } catch (error) {
+      console.error("Error skipping song:", error);
+      interaction.reply("An error occurred while trying to skip the song.");
+    }
+  }
+
+  if (interaction.commandName === "stop") {
+    const queue = distube.getQueue(interaction.guild.id);
+    if (!queue) {
+      return interaction.reply("There is no music playing.");
+    }
+
+    try {
+      distube.stop(interaction.guild.id);
+      interaction.reply("⏹️ Stopped the music and cleared the queue.");
+    } catch (error) {
+      console.error("Error stopping song:", error);
+      interaction.reply("An error occurred while trying to stop the music.");
+    }
+  }
 });
 
 // DisTube Events
@@ -104,13 +130,13 @@ distube
     );
   })
   .on("error", (channel, error) => {
-    console.error(error);
-    if (channel) channel.send(`❌ An error encountered: ${error.message}`);
+    console.error('error is', error);
+    // if (channel) channel.send(`❌ An error encountered: ${error.message}`);
   });
 
 // Register slash commands
 client.on("ready", async () => {
-  const guildId = "1088800296949514261"; // Replace with your server's ID
+  const guildId = client.guilds.cache.map(guild => guild.id);
   const commands = [
     {
       type: 1,
@@ -129,6 +155,16 @@ client.on("ready", async () => {
       type: 1,
       name: "queue",
       description: "Shows the current song queue",
+    },
+    {
+      type: 1,
+      name: "skip",
+      description: "Skips the current song in the queue",
+    },
+    {
+      type: 1,
+      name: "stop",
+      description: "Stops the music and clears the queue",
     },
   ];
 
