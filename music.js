@@ -6,10 +6,8 @@ const {
   Routes,
 } = require("discord.js");
 const { DisTube } = require("distube");
-const { SpotifyPlugin } = require("@distube/spotify");
-const { SoundCloudPlugin } = require("@distube/soundcloud");
-const { YtDlpPlugin } = require("@distube/yt-dlp");
 const { config } = require("dotenv");
+const { YouTubePlugin } = require("@distube/youtube")
 
 // Load environment variables
 config();
@@ -29,7 +27,7 @@ const client = new Client({
 // Initialize DisTube with plugins
 const distube = new DisTube(client, {
   emitNewSongOnly: true,
-  plugins: [new SpotifyPlugin(), new SoundCloudPlugin(), new YtDlpPlugin({ update: true })],
+  plugins: [new YouTubePlugin()]
 });
 
 // Ready Event
