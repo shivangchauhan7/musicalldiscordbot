@@ -6,9 +6,8 @@ const {
   Routes,
 } = require("discord.js");
 const { config } = require("dotenv");
-// const { YoutubeiExtractor } = require("discord-player-youtubei")
-
-const { useMainPlayer, Player, QueryType  } = require("discord-player");
+const { Player, QueryType } = require("discord-player");
+const { YoutubeiExtractor } = require("discord-player-youtubei");
 
 // Load environment variables
 config();
@@ -34,10 +33,13 @@ const player = new Player(client, {
   initialVolume: 50, // Default volume level
 });
 
+// Add the YouTubeiExtractor to the player
+player.extractors.register(YoutubeiExtractor, {});
+
 // Ready Event
 client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  
+  registerCommands();
   await player.extractors.loadDefault();
 });
 
@@ -74,37 +76,74 @@ client.on("interactionCreate", async (interaction) => {
       if (!queue.connection) {
         await queue.connect(voiceChannel); // Connect to the voice channel
       }
-      // Search for the track on YouTube
+
+      // Search for the track on YouTube using the YouTubeiExtractor
       const searchResults = await player.search(keyword, {
-        requestedBy: interaction.user,  // Optionally include the user who requested the song
-        searchEngine: QueryType.AUTO         // Use YouTube as the search engine
+        requestedBy: interaction.user, // Optionally include the user who requested the song
+        searchEngine: QueryType.YOUTUBE, // Explicitly use YouTube as the search engine
       });
 
-      
       if (!searchResults.hasTracks()) {
-        return interaction.editReply("No results found for the provided search term or keyword.");
+        return interaction.editReply(
+          "No results found for the provided search term or keyword."
+        );
       }
 
+      // Play the track on the voice channel
       await player.play(voiceChannel, searchResults, {
         nodeOptions: {
           metadata: {
             channel: voiceChannel,
-            client: interaction.guild?.members.me
+            client: interaction.guild?.members.me,
           },
           leaveOnEnd: true,
           leaveOnEndCooldown: 50000,
           volume: 50,
         },
       });
+
+      interaction.editReply(
+        `🎶 Now playing: **${searchResults.tracks[0].title}**`
+      );
     } catch (error) {
       console.error("Error playing song:", error);
       interaction.editReply("An error occurred while trying to play the song.");
     }
   }
+
+  if (interaction.commandName === "skip") {
+    const queue = player.nodes.get(interaction.guild.id);
+    if (!queue || !queue.node.isPlaying()) {
+      return interaction.reply("There is no song currently playing.");
+    }
+
+    try {
+      queue.node.skip();
+      interaction.reply("⏭️ Skipped the current song.");
+    } catch (error) {
+      console.error("Error skipping song:", error);
+      interaction.reply("An error occurred while trying to skip the song.");
+    }
+  }
+
+  if (interaction.commandName === "stop") {
+    const queue = player.nodes.get(interaction.guild.id);
+    if (!queue) {
+      return interaction.reply("There is no song currently playing.");
+    }
+
+    try {
+      queue.delete();
+      interaction.reply("🛑 Stopped the music and cleared the queue.");
+    } catch (error) {
+      console.error("Error stopping song:", error);
+      interaction.reply("An error occurred while trying to stop the song.");
+    }
+  }
 });
 
 // Register slash commands
-client.on("ready", async () => {
+async function registerCommands() {
   const guildId = client.guilds.cache.map((guild) => guild.id);
   const commands = [
     {
@@ -115,7 +154,7 @@ client.on("ready", async () => {
         {
           type: 3,
           name: "keyword",
-          description: "keyword or search term",
+          description: "Keyword or search term",
           required: true,
         },
       ],
@@ -149,7 +188,7 @@ client.on("ready", async () => {
     .catch(console.error);
 
   console.log("Slash commands registered.");
-});
+}
 
 // Login to Discord
 client.login(DISCORD_TOKEN);
