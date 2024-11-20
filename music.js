@@ -6,9 +6,9 @@ const {
   Routes,
 } = require("discord.js");
 const { config } = require("dotenv");
-const { YouTubePlugin } = require("@distube/youtube");
+// const { YoutubeiExtractor } = require("discord-player-youtubei")
 
-const { useMainPlayer, Player } = require("discord-player");
+const { useMainPlayer, Player, QueryType  } = require("discord-player");
 
 // Load environment variables
 config();
@@ -37,7 +37,8 @@ const player = new Player(client, {
 // Ready Event
 client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  await player.extractors.loadDefault((ext) => ext !== "YouTubeExtractor");
+  
+  await player.extractors.loadDefault();
 });
 
 // Handle slash commands
@@ -45,12 +46,12 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
   if (interaction.commandName === "play") {
-    const url = "not afraid eminem";
+    const keyword = interaction.options.getString("keyword");
 
-    // Validate URL or search term
-    if (!url) {
+    // Validate keyword or search term
+    if (!keyword) {
       return interaction.reply(
-        "Please provide a valid YouTube URL or search term."
+        "Please provide a valid YouTube keyword or search term."
       );
     }
 
@@ -73,30 +74,23 @@ client.on("interactionCreate", async (interaction) => {
       if (!queue.connection) {
         await queue.connect(voiceChannel); // Connect to the voice channel
       }
-
-      await player.play(voiceChannel, "not afraid eminem", {
-        nodeOptions: {
-          // nodeOptions are the options for guild node (aka your queue in simple word)
-          metadata: interaction, // we can access this metadata object using queue.metadata later on
-        },
-      });
-
       // Search for the track on YouTube
-      // const searchResults = await player.search(url, {
-      //   requestedBy: interaction.user,  // Optionally include the user who requested the song
-      //   searchEngine: 'youtube',         // Use YouTube as the search engine
-      // });
+      const searchResults = await player.search(keyword, {
+        requestedBy: interaction.user,  // Optionally include the user who requested the song
+        searchEngine: QueryType.AUTO         // Use YouTube as the search engine
+      });
+      console.log('searchResults', searchResults.hasTracks())
 
-      // if (!searchResults || searchResults.tracks.length === 0) {
-      //   return interaction.editReply("No results found for the provided search term or URL.");
-      // }
+      if (!searchResults || searchResults.tracks.length === 0) {
+        return interaction.editReply("No results found for the provided search term or keyword.");
+      }
 
-      // const track = searchResults.tracks[0];
-      // queue.addTrack(track);
-      // // Play the track if the queue is not already playing
-      // if (!queue.node.isPlaying()) await queue.node.play();
+      const track = searchResults.tracks[0];
+      queue.addTrack(track);
+      // Play the track if the queue is not already playing
+      if (!queue.node.isPlaying()) await queue.node.play();
 
-      // interaction.editReply(`🎶 Now playing: **${track.title}**`);
+      interaction.editReply(`🎶 Now playing: **${track.title}**`);
     } catch (error) {
       console.error("Error playing song:", error);
       interaction.editReply("An error occurred while trying to play the song.");
@@ -115,8 +109,8 @@ client.on("ready", async () => {
       options: [
         {
           type: 3,
-          name: "url",
-          description: "URL or search term",
+          name: "keyword",
+          description: "keyword or search term",
           required: true,
         },
       ],
