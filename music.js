@@ -79,18 +79,23 @@ client.on("interactionCreate", async (interaction) => {
         requestedBy: interaction.user,  // Optionally include the user who requested the song
         searchEngine: QueryType.AUTO         // Use YouTube as the search engine
       });
-      console.log('searchResults', searchResults.hasTracks())
 
-      if (!searchResults || searchResults.tracks.length === 0) {
+      
+      if (!searchResults.hasTracks()) {
         return interaction.editReply("No results found for the provided search term or keyword.");
       }
 
-      const track = searchResults.tracks[0];
-      queue.addTrack(track);
-      // Play the track if the queue is not already playing
-      if (!queue.node.isPlaying()) await queue.node.play();
-
-      interaction.editReply(`🎶 Now playing: **${track.title}**`);
+      await player.play(voiceChannel, searchResults, {
+        nodeOptions: {
+          metadata: {
+            channel: voiceChannel,
+            client: interaction.guild?.members.me
+          },
+          leaveOnEnd: true,
+          leaveOnEndCooldown: 50000,
+          volume: 50,
+        },
+      });
     } catch (error) {
       console.error("Error playing song:", error);
       interaction.editReply("An error occurred while trying to play the song.");
