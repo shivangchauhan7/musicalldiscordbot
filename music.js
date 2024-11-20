@@ -5,9 +5,10 @@ const {
   REST,
   Routes,
 } = require("discord.js");
-const { DisTube } = require("distube");
 const { config } = require("dotenv");
-const { YouTubePlugin } = require("@distube/youtube")
+const { YouTubePlugin } = require("@distube/youtube");
+
+const { useMainPlayer, Player } = require("discord-player");
 
 // Load environment variables
 config();
@@ -24,15 +25,19 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
-// Initialize DisTube with plugins
-const distube = new DisTube(client, {
-  emitNewSongOnly: true,
-  plugins: [new YouTubePlugin()]
+// Initialize Player
+const player = new Player(client, {
+  leaveOnEnd: false, // Stay connected after queue ends
+  leaveOnStop: false, // Stay connected after manual stop
+  leaveOnEmpty: true, // Leave only if the voice channel is empty
+  bufferingTimeout: 3000, // Timeout for buffering (ms)
+  initialVolume: 50, // Default volume level
 });
 
 // Ready Event
-client.once("ready", () => {
+client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
+  await player.extractors.loadDefault((ext) => ext !== "YouTubeExtractor");
 });
 
 // Handle slash commands
@@ -40,101 +45,68 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
   if (interaction.commandName === "play") {
-    const url = interaction.options.getString("url");
+    const url = "not afraid eminem";
 
     // Validate URL or search term
     if (!url) {
-      return interaction.reply("Please provide a valid YouTube URL or search term.");
+      return interaction.reply(
+        "Please provide a valid YouTube URL or search term."
+      );
     }
 
     // Ensure the user is in a voice channel
     if (!interaction.member.voice.channel) {
-      return interaction.reply("You need to be in a Voice Channel to play music.");
+      return interaction.reply(
+        "You need to be in a Voice Channel to play music."
+      );
     }
 
     await interaction.deferReply();
 
     try {
-      // Play music
-      await distube.play(interaction.member.voice.channel, url, {
-        member: interaction.member,
-        textChannel: interaction.channel,
-        interaction,
+      const voiceChannel = interaction.member.voice.channel;
+
+      // Create a queue if it doesn't exist
+      const queue = player.nodes.create(voiceChannel.guild.id);
+
+      // Ensure the bot joins the voice channel
+      if (!queue.connection) {
+        await queue.connect(voiceChannel); // Connect to the voice channel
+      }
+
+      await player.play(voiceChannel, "not afraid eminem", {
+        nodeOptions: {
+          // nodeOptions are the options for guild node (aka your queue in simple word)
+          metadata: interaction, // we can access this metadata object using queue.metadata later on
+        },
       });
 
-      interaction.editReply(`Searching and playing: **${url}**`);
+      // Search for the track on YouTube
+      // const searchResults = await player.search(url, {
+      //   requestedBy: interaction.user,  // Optionally include the user who requested the song
+      //   searchEngine: 'youtube',         // Use YouTube as the search engine
+      // });
+
+      // if (!searchResults || searchResults.tracks.length === 0) {
+      //   return interaction.editReply("No results found for the provided search term or URL.");
+      // }
+
+      // const track = searchResults.tracks[0];
+      // queue.addTrack(track);
+      // // Play the track if the queue is not already playing
+      // if (!queue.node.isPlaying()) await queue.node.play();
+
+      // interaction.editReply(`🎶 Now playing: **${track.title}**`);
     } catch (error) {
       console.error("Error playing song:", error);
       interaction.editReply("An error occurred while trying to play the song.");
     }
   }
-
-  if (interaction.commandName === "queue") {
-    const queue = distube.getQueue(interaction.guild.id);
-    if (!queue) {
-      return interaction.reply("There is no song in the queue.");
-    }
-
-    const queueList = queue.songs
-      .map((song, index) => `${index + 1}. **${song.name}** - \`${song.formattedDuration}\``)
-      .join("\n");
-
-    interaction.reply(`**Current Queue**\n${queueList}`);
-  }
-
-  if (interaction.commandName === "skip") {
-    const queue = distube.getQueue(interaction.guild.id);
-    if (!queue) {
-      return interaction.reply("There is no song to skip.");
-    }
-
-    try {
-      distube.skip(interaction.guild.id);
-      interaction.reply("⏩ Skipped the current song.");
-    } catch (error) {
-      console.error("Error skipping song:", error);
-      interaction.reply("An error occurred while trying to skip the song.");
-    }
-  }
-
-  if (interaction.commandName === "stop") {
-    const queue = distube.getQueue(interaction.guild.id);
-    if (!queue) {
-      return interaction.reply("There is no music playing.");
-    }
-
-    try {
-      distube.stop(interaction.guild.id);
-      interaction.reply("⏹️ Stopped the music and cleared the queue.");
-    } catch (error) {
-      console.error("Error stopping song:", error);
-      interaction.reply("An error occurred while trying to stop the music.");
-    }
-  }
 });
-
-// DisTube Events
-distube
-  .on("playSong", (queue, song) => {
-    queue.textChannel.send(
-      `🎶 Now playing: **${song.name}** - \`${song.formattedDuration}\`\n` +
-      `Next in queue: **${queue.songs[1]?.name || "No more songs in queue"}**`
-    );
-  })
-  .on("addSong", (queue, song) => {
-    queue.textChannel.send(
-      `✅ Added to queue: **${song.name}** - \`${song.formattedDuration}\`\n` +
-      `Next in queue: **${queue.songs[1]?.name || "No more songs in queue"}**`
-    );
-  })
-  .on("error", (channel, error) => {
-    console.error('error is', error);
-    // if (channel) channel.send(`❌ An error encountered: ${error.message}`);
-  });
 
 // Register slash commands
 client.on("ready", async () => {
-  const guildId = client.guilds.cache.map(guild => guild.id);
+  const guildId = client.guilds.cache.map((guild) => guild.id);
   const commands = [
     {
       type: 1,
